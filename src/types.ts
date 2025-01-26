@@ -13,3 +13,23 @@ export type CodingProblem = {
   difficulty: DifficultyLevel;
   timeLimit: number;
 };
+
+export interface TestCase {
+  input: string;
+  output: string;
+  explanation?: string;
+}
+
+export type CodingChallenge = {
+  title: string;
+  description: string;
+  examples: Array<{
+    input: string;
+    output: string;
+    explanation: string;
+  }>;
+  starterCode: {
+    [key: string]: string;  // Maps language ID to starter code
+  };
+  testCases: TestCase[];
+};

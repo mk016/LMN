@@ -9,10 +9,11 @@ import { DifficultyLevel } from '@/types';
 import { Code, Trophy, Play, CheckCircle, XCircle, Send, Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useWallet } from '@/hooks/useWallet';
-import { ethers } from 'ethers';
 import { Terminal } from '@/components/Terminal';
-import { generateCodingChallenge, type CodingChallenge } from '@/services/gemini';
-import { useParams } from 'next/navigation';
+import { socketService } from '@/services/socket';
+import { getChallengeForRoom, type CodingChallenge } from '@/data/questions';
+import { toast } from 'react-hot-toast';
+import { verifySolution } from '@/services/verification';
 
 const MonacoEditor = dynamic(
   () => import('@monaco-editor/react'),
@@ -56,31 +57,112 @@ export default function Home() {
   });
   const [roomId, setRoomId] = useState<string | null>(null);
   const [playerNumber, setPlayerNumber] = useState<1 | 2 | null>(null);
+  const [opponentSolution, setOpponentSolution] = useState<{
+    code: string;
+    timeElapsed: number;
+    isCorrect: boolean;
+  } | null>(null);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isTimerActive, setIsTimerActive] = useState(false);
+  const [isSolutionCorrect, setIsSolutionCorrect] = useState(false);
+  const [hasRunTests, setHasRunTests] = useState(false);
+  const [solutions, setSolutions] = useState<{
+    [key: string]: {
+      code: string;
+      timeElapsed: number;
+    }
+  }>({});
+  const [playerName, setPlayerName] = useState<string>('');
+  const [showNameInput, setShowNameInput] = useState(true);
+  const [opponentName, setOpponentName] = useState<string>('');
+  const [isGameStarted, setIsGameStarted] = useState(false);
 
   useEffect(() => {
-    // Generate or join room logic
-    if (!account) return;
-    
     const joinOrCreateRoom = async () => {
-      // This is a placeholder - implement actual room joining logic
       const currentRoomId = new URLSearchParams(window.location.search).get('room');
       
       if (currentRoomId) {
-        // Join existing room
         setRoomId(currentRoomId);
-        setPlayerNumber(2);
+        setShowNameInput(true);
       } else {
-        // Create new room
         const newRoomId = Math.random().toString(36).substring(7);
         setRoomId(newRoomId);
         setPlayerNumber(1);
-        // Redirect to room URL
+        setPlayerName('Player 1');
+        setShowNameInput(false);
         window.history.pushState({}, '', `?room=${newRoomId}`);
       }
     };
 
     joinOrCreateRoom();
-  }, [account]);
+  }, []);
+
+  useEffect(() => {
+    if (!roomId || !account) return;
+
+    // Connect to WebSocket
+    socketService.connect(roomId);
+
+    // Get the same challenge for this room
+    const challenge = getChallengeForRoom(roomId);
+    
+    if (playerNumber === 1) {
+      // Only player 1 emits the challenge
+      socketService.emitChallenge(challenge);
+    }
+
+    // Both players set their challenge
+    setChallenge(challenge);
+    localStorage.setItem('currentChallenge', JSON.stringify(challenge));
+    if (selectedLanguage) {
+      setCode(challenge.starterCode[selectedLanguage]);
+    }
+
+    // Subscribe to player updates
+    socketService.subscribeToPlayerUpdate((updatedPlayers) => {
+      setPlayers(updatedPlayers);
+    });
+
+    // Subscribe to opponent's solution
+    socketService.subscribeToOpponentSolution((solution) => {
+      setOpponentSolution(solution);
+      
+      // If both solutions are submitted, redirect to verification page
+      if (isSubmitted) {
+        window.location.href = `/verify?room=${roomId}`;
+      }
+    });
+
+    // Subscribe to players update
+    socketService.subscribeToPlayersUpdate((players) => {
+      setOpponentName(players[playerNumber === 1 ? 2 : 1]?.name || '');
+    });
+
+    // Start game when both players are connected
+    socketService.on('startGame', (challenge: CodingChallenge) => {
+      setIsGameStarted(true);
+      setIsTimerActive(true);
+      setTimeLeft(120); // Reset timer
+    });
+
+    return () => {
+      socketService.disconnect();
+    };
+  }, [roomId, account, selectedLanguage, playerNumber]);
+
+  // Timer logic
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isTimerActive && timeLeft > 0) {
+      timer = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0) {
+      setIsTimerActive(false);
+      // Handle time up logic here
+    }
+    return () => clearInterval(timer);
+  }, [isTimerActive, timeLeft]);
 
   const handleStart = async () => {
     if (!selectedLanguage || !selectedDifficulty || !roomId) {
@@ -90,31 +172,26 @@ export default function Home() {
     setIsLoading(true);
     setIsGenerating(true);
     try {
-      // Generate the same challenge for both players
-      const newChallenge = await generateCodingChallenge(
-        selectedDifficulty,
-        selectedLanguage
-      );
+      // Use the room-specific challenge
+      const challenge = getChallengeForRoom(roomId);
       
-      // Store challenge in shared state (e.g., using a real-time database)
-      // This is a placeholder - implement actual challenge sharing
-      setChallenge(newChallenge);
-      setCode(newChallenge.starterCode);
+      setChallenge(challenge);
+      localStorage.setItem('currentChallenge', JSON.stringify(challenge));
+      setCode(challenge.starterCode[selectedLanguage]);
       setIsStarted(true);
-      setOutput(['Challenge generated successfully! Waiting for other player...']);
+      setOutput(['Challenge started! Waiting for other player...']);
       
-      // Update player status
       setPlayers(prev => ({
         ...prev,
         [`player${playerNumber}`]: {
           connected: true,
-          code: newChallenge.starterCode,
+          code: challenge.starterCode[selectedLanguage],
           completed: false
         }
       }));
     } catch (error) {
       console.error('Error:', error);
-      setOutput(['Failed to generate challenge. Please try again.']);
+      setOutput(['Failed to start challenge. Please try again.']);
     } finally {
       setIsLoading(false);
       setIsGenerating(false);
@@ -125,50 +202,182 @@ export default function Home() {
     setIsTimeUp(true);
   };
 
-  const runTests = async () => {
-    if (!code) return;
-
-    setIsProcessing(true);
-    setOutput(['Initializing test environment...']);
-
+  const runCode = async (code: string, testCase: { input: string; output: string }) => {
     try {
-      // Simulate test running - replace with actual test logic
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setOutput(prev => [...prev, 'Running test cases...']);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Example test result - replace with actual test logic
-      const passed = Math.random() > 0.5;
-      setTestResults({
-        passed,
-        message: passed ? 'All test cases passed!' : 'Some test cases failed. Try again!'
-      });
-
-      setOutput(prev => [...prev, testResults?.message || '']);
-    } catch (error) {
-      setOutput(prev => [...prev, 'Error running tests: ' + error]);
+      setIsProcessing(true);
+      setOutput(prev => [
+        ...prev, 
+        '🔄 Running test case...',
+        `Input: ${testCase.input}`,
+        `Expected Output: ${testCase.output}`
+      ]);
+      
+      // Create a unique verification for this test case
+      const isCorrect = await verifySolution(code, [testCase]);
+      
+      // Store the result in state to prevent caching
+      const result = isCorrect ? '✅ PASSED' : '❌ FAILED';
+      const resultDetails = isCorrect 
+        ? `Output matches expected result`
+        : `Output does not match expected result`;
+      
+      setOutput(prev => [
+        ...prev,
+        `${result}`,
+        resultDetails,
+        '-------------------'
+      ]);
+      
+      return isCorrect;
+    } catch (error: any) {
+      setOutput(prev => [...prev, `❌ Error: ${error.message}`, '-------------------']);
+      return false;
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleSubmit = async () => {
-    if (!code) return;
+    if (!code || !challenge || !playerNumber || isSubmitting) return;
 
     setIsSubmitting(true);
+    setIsTimerActive(false);
+    const finalTime = 120 - timeLeft;
+
     try {
-      // Run final tests
-      await runTests();
+      setOutput(['🔄 Verifying solution...']);
       
-      // Stop the timer
-      setIsTimeUp(true);
+      const isCorrect = await verifySolution(code, challenge.testCases).catch(error => {
+        setOutput(prev => [...prev, `❌ ${error.message}`]);
+        return false;
+      });
       
-      setOutput(prev => [...prev, 'Solution submitted successfully!']);
-    } catch (error) {
-      setOutput(prev => [...prev, 'Error submitting solution: ' + error]);
+      if (isCorrect) {
+        setOutput(prev => [...prev, '✅ Solution verified!']);
+        
+        // Store solution with more details
+        const currentSolution = {
+          playerNumber,
+          playerName,
+          code,
+          timeElapsed: finalTime,
+          isCorrect: true
+        };
+        
+        localStorage.setItem(`player${playerNumber}Solution`, JSON.stringify(currentSolution));
+        
+        // Notify opponent
+        socketService.submitSolution(playerNumber, code, finalTime, true);
+        setIsSubmitted(true);
+
+        // If opponent already submitted, redirect to verification page
+        if (opponentSolution) {
+          setOutput(prev => [...prev, '🏁 Both solutions submitted! Redirecting...']);
+          
+          // Store opponent's solution
+          const opponentSolutionData = {
+            playerNumber: playerNumber === 1 ? 2 : 1,
+            playerName: opponentName,
+            code: opponentSolution.code,
+            timeElapsed: opponentSolution.timeElapsed,
+            isCorrect: opponentSolution.isCorrect
+          };
+          
+          localStorage.setItem(`player${playerNumber === 1 ? 2 : 1}Solution`, 
+            JSON.stringify(opponentSolutionData)
+          );
+          
+          // Redirect after a short delay
+          setTimeout(() => {
+            window.location.href = `/verify?room=${roomId}`;
+          }, 1500);
+        } else {
+          setOutput(prev => [...prev, '⏳ Waiting for opponent to submit...']);
+        }
+      } else {
+        setOutput(prev => [...prev, '❌ Solution failed verification', 'Please fix your code and try again']);
+        setIsTimerActive(true);
+      }
+    } catch (error: any) {
+      setOutput(prev => [...prev, '❌ Error occurred', error.message]);
+      setIsTimerActive(true);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const verifyAndAnnounceWinner = async () => {
+    if (!challenge || !playerNumber || !opponentSolution) return;
+
+    setOutput(prev => [...prev, '🧪 Verifying both solutions...']);
+
+    try {
+      // Verify current player's solution
+      const playerResult = await verifySolution(code, challenge.testCases);
+      
+      // Verify opponent's solution
+      const opponentResult = await verifySolution(opponentSolution.code, challenge.testCases);
+
+      // Determine winner based on correctness and time
+      let winner: number | null = null;
+
+      if (playerResult && !opponentResult) {
+        winner = playerNumber;
+      } else if (!playerResult && opponentResult) {
+        winner = playerNumber === 1 ? 2 : 1;
+      } else if (playerResult && opponentResult) {
+        // Both correct, compare times
+        winner = opponentSolution.timeElapsed < (120 - timeLeft) ? 
+          (playerNumber === 1 ? 2 : 1) : playerNumber;
+      }
+
+      if (winner) {
+        const results = {
+          winner: {
+            playerNumber: winner,
+            address: winner === playerNumber ? account : 'Opponent',
+            timeElapsed: winner === playerNumber ? (120 - timeLeft) : opponentSolution.timeElapsed,
+            code: winner === playerNumber ? code : opponentSolution.code,
+            isCorrect: winner === playerNumber ? playerResult : opponentResult
+          },
+          loser: {
+            playerNumber: winner === 1 ? 2 : 1,
+            address: winner === playerNumber ? 'Opponent' : account,
+            timeElapsed: winner === playerNumber ? opponentSolution.timeElapsed : (120 - timeLeft),
+            code: winner === playerNumber ? opponentSolution.code : code,
+            isCorrect: winner === playerNumber ? opponentResult : playerResult
+          }
+        };
+
+        localStorage.setItem('battleResults', JSON.stringify(results));
+        window.location.href = '/winner';
+      } else {
+        // Neither solution is correct
+        setOutput(prev => [...prev, '❌ Neither solution passed all test cases']);
+        toast.error('No winner - both solutions failed');
+        setIsTimerActive(true);
+      }
+    } catch (error: any) {
+      console.error('Verification error:', error);
+      setOutput(prev => [...prev, '❌ Error verifying solutions']);
+      toast.error('Error verifying solutions');
+      setIsTimerActive(true);
+    }
+  };
+
+  const handleNameSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!playerName.trim() || !roomId) return;
+    
+    setPlayerNumber(2);
+    setShowNameInput(false);
+    
+    // Notify server about new player
+    socketService.emitPlayerJoin({
+      roomId,
+      playerNumber: 2,
+      playerName
+    });
   };
 
   return (
@@ -185,7 +394,7 @@ export default function Home() {
                 <Timer 
                   duration={120} 
                   onTimeUp={handleTimeUp} 
-                  isActive={true}
+                  isActive={isTimerActive}
                   onTimeUpdate={setTimeLeft}
                 />
               )}
@@ -196,13 +405,46 @@ export default function Home() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {showNameInput && roomId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-8 rounded-lg max-w-md w-full mx-4">
+              <h2 className="text-2xl font-bold mb-4">Enter Your Name</h2>
+              <form onSubmit={handleNameSubmit}>
+                <input
+                  type="text"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder="Enter your name"
+                  className="w-full px-4 py-2 border rounded mb-4"
+                  required
+                />
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                >
+                  Join Room
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
         {roomId && !isStarted && (
           <div className="text-center mb-4">
             <p className="text-lg font-medium">
               Room ID: {roomId}
-              {playerNumber === 1 && (
-                <span className="ml-2 text-gray-600">
-                  Share this URL with your opponent
+              <br />
+              {playerNumber === 1 ? (
+                <span className="text-gray-600">
+                  Share this URL with your opponent: 
+                  <br />
+                  <code className="bg-gray-100 px-2 py-1 rounded">
+                    {window.location.href}
+                  </code>
+                </span>
+              ) : (
+                <span className="text-gray-600">
+                  Playing as {playerName}
                 </span>
               )}
             </p>
@@ -299,119 +541,108 @@ export default function Home() {
                     </div>
                   ))}
 
-                  <div className="mt-4">
-                    <h3 className="font-semibold mb-2">Constraints:</h3>
-                    <ul className="list-disc list-inside text-sm text-gray-700">
-                      {challenge.constraints.map((constraint, index) => (
-                        <li key={index}>{constraint}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
+                  <div className="grid grid-cols-1 gap-4">
+                    {/* Conditional Rendering for Player 1 */}
+                    {playerNumber === 1 && (
+                      <div className="space-y-4">
+                        <h3 className="font-medium">Player 1 (You - {playerName})</h3>
+                        <div className="bg-white rounded-lg shadow-sm">
+                          <MonacoEditor
+                            height="400px"
+                            defaultLanguage={selectedLanguage}
+                            theme="vs-dark"
+                            value={players.player1?.code}
+                            options={{
+                              minimap: { enabled: false },
+                              fontSize: 14,
+                              readOnly: isTimeUp, // Player 1's editor is read-only when time is up
+                            }}
+                            onChange={(value) => {
+                              setCode(value || "");
+                              setPlayers((prev) => ({
+                                ...prev,
+                                player1: { ...prev.player1!, code: value || "" },
+                              }));
+                            }}
+                          />
+                        </div>
+                        {/* Buttons for Player 1 */}
+                        <div className="flex gap-4">
+                          <button
+                            onClick={handleSubmit}
+                            disabled={isSubmitting || isTimeUp || !code}
+                            className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-all
+                              ${isSubmitting || isTimeUp || !code
+                                ? "bg-gray-400 cursor-not-allowed"
+                                : "bg-blue-600 hover:bg-blue-700"
+                              }`}
+                          >
+                            {isSubmitting ? (
+                              <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                <span>Submitting...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send className="w-5 h-5" />
+                                <span>Submit Solution</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Player 1 Editor */}
-                  <div className="space-y-4">
-                    <h3 className="font-medium">Player 1</h3>
-                    <div className="bg-white rounded-lg shadow-sm">
-                      <MonacoEditor
-                        height="400px"
-                        defaultLanguage={selectedLanguage}
-                        theme="vs-dark"
-                        value={players.player1?.code}
-                        options={{
-                          minimap: { enabled: false },
-                          fontSize: 14,
-                          readOnly: playerNumber !== 1 || isTimeUp
-                        }}
-                        onChange={(value) => {
-                          if (playerNumber === 1) {
-                            setCode(value || '');
-                            setPlayers(prev => ({
-                              ...prev,
-                              player1: { ...prev.player1!, code: value || '' }
-                            }));
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Player 2 Editor */}
-                  <div className="space-y-4">
-                    <h3 className="font-medium">Player 2</h3>
-                    <div className="bg-white rounded-lg shadow-sm">
-                      <MonacoEditor
-                        height="400px"
-                        defaultLanguage={selectedLanguage}
-                        theme="vs-dark"
-                        value={players.player2?.code}
-                        options={{
-                          minimap: { enabled: false },
-                          fontSize: 14,
-                          readOnly: playerNumber !== 2 || isTimeUp
-                        }}
-                        onChange={(value) => {
-                          if (playerNumber === 2) {
-                            setCode(value || '');
-                            setPlayers(prev => ({
-                              ...prev,
-                              player2: { ...prev.player2!, code: value || '' }
-                            }));
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div className="flex gap-4">
-                      <button
-                        onClick={runTests}
-                        disabled={isProcessing || isTimeUp || !code}
-                        className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-all
-                          ${isProcessing || isTimeUp || !code
-                            ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-green-600 hover:bg-green-700'
-                          }`}
-                      >
-                        {isProcessing ? (
-                          <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            <span>Running...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Play className="w-5 h-5" />
-                            <span>Run Tests</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={handleSubmit}
-                        disabled={isSubmitting || isTimeUp || !code}
-                        className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-all
-                          ${isSubmitting || isTimeUp || !code
-                            ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-blue-600 hover:bg-blue-700'
-                          }`}
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            <span>Submitting...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Send className="w-5 h-5" />
-                            <span>Submit Solution</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                    {/* Conditional Rendering for Player 2 */}
+                    {playerNumber === 2 && (
+                      <div className="space-y-4">
+                        <h3 className="font-medium">Player 2 (You - {playerName})</h3>
+                        <div className="bg-white rounded-lg shadow-sm">
+                          <MonacoEditor
+                            height="400px"
+                            defaultLanguage={selectedLanguage}
+                            theme="vs-dark"
+                            value={players.player2?.code}
+                            options={{
+                              minimap: { enabled: false },
+                              fontSize: 14,
+                              readOnly: isTimeUp, // Player 2's editor is read-only when time is up
+                            }}
+                            onChange={(value) => {
+                              setCode(value || "");
+                              setPlayers((prev) => ({
+                                ...prev,
+                                player2: { ...prev.player2!, code: value || "" },
+                              }));
+                            }}
+                          />
+                        </div>
+                        {/* Buttons for Player 2 */}
+                        <div className="flex gap-4">
+                          <button
+                            onClick={handleSubmit}
+                            disabled={isSubmitting || isTimeUp || !code}
+                            className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-all
+                              ${isSubmitting || isTimeUp || !code
+                                ? "bg-gray-400 cursor-not-allowed"
+                                : "bg-blue-600 hover:bg-blue-700"
+                              }`}
+                          >
+                            {isSubmitting ? (
+                              <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                <span>Submitting...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send className="w-5 h-5" />
+                                <span>Submit Solution</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -457,6 +688,32 @@ export default function Home() {
                         Try Another Challenge
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {opponentName && (
+                  <div className="text-sm text-gray-600 mt-2">
+                    Opponent: {opponentName}
+                  </div>
+                )}
+
+                {/* Add opponent status display */}
+                {isStarted && (
+                  <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="font-medium">You:</span> {playerName}
+                      </div>
+                      <div>
+                        <span className="font-medium">Opponent:</span> {opponentName || 'Waiting...'}
+                      </div>
+                    </div>
+                    {opponentName && (
+                      <div className="text-sm text-gray-600 mt-2">
+                        {isSubmitted ? '✅ You submitted' : '⏳ Writing code...'}
+                        {opponentSolution ? ' | ✅ Opponent submitted' : ' | ⏳ Opponent writing code...'}
+                      </div>
+                    )}
                   </div>
                 )}
               </>
