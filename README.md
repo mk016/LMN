@@ -1,102 +1,85 @@
-LNMHacks 7.0
+# 🚀 LNMHacks 7.0 - CODE BATTLE ⚔️  
 
-CODE BATTLE
+**Real-time coding duels with a secure betting system powered by Solana Blockchain.**  
 
-Website link ➔
+🌐 **Website:** [Click Here](#)  
+📑 **PPT:** [Click Here](#)  
 
-PPT Link ➔
+---
 
-Tech Stack
+## 🛠 Tech Stack  
 
-Client: React, Vite, TailwindCSS, JavaScriptServer: Solana Blockchain, Metaplex, Node, Express, Firebase Functions, Firebase Storage
+### **Frontend**  
+- ⚡ React, Vite, TailwindCSS, JavaScript  
 
-Installation
+### **Backend**  
+- 🔗 Solana Blockchain, Metaplex  
+- 🔥 Node.js, Express  
+- ☁️ Firebase Functions, Firebase Storage  
 
-Clone the project
+---
 
+## ⚡ Installation  
+
+### **Clone the Repository**  
+```sh
 git clone https://github.com/mk016/CodeBattle
-
+cd CodeBattle
 Frontend Setup
-
+sh
+Copy
 cd LMN
-npm i
+npm install
 npm run dev
-
 Backend Setup
-
-To run the backend, use the following commands:
-
+sh
+Copy
 cd server
-npm i
+npm install
 npm run serve
+🔥 Key Features
+✅ Real-time coding battles between two players
+✅ Secure & transparent betting using Solana Blockchain
+✅ Automatic prize distribution to winner’s crypto wallet
+✅ No upfront platform charges – Bet and win!
+✅ Ultra-fast transactions powered by Solana
 
-Key Features
+❓ FAQ
+🏆 How does Code Battle work?
+1️⃣ Players connect their Phantom wallet.
+2️⃣ Both players place a bet in Sepolia ETH.
+3️⃣ A coding challenge is presented.
+4️⃣ Players write & submit their solutions.
+5️⃣ Solutions are evaluated for correctness & optimization via Gemini AI.
+6️⃣ Winner gets the prize pool directly in their wallet!
 
-Real-time coding competition between two players
+❌ What if no player solves the code?
+If no valid solution is submitted, the bet amount is refunded to both players after a timeout.
+🎟️ Is there a participation fee?
+Nope! No participation fees. Players only need to place their bet amounts.
+⚡ How fast are transactions?
+Lightning fast! Solana ensures transactions reflect within seconds.
+🤖 How are solutions evaluated?
+AI-powered evaluation via Gemini AI, ensuring fair & optimized assessments.
+🎯 Lessons Learned
+Blockchain Security 🛡️: Implementing decentralized transactions securely.
+Real-Time Systems ⏳: Building multiplayer battles with low latency.
+Scalability & Performance 🚀: Ensuring a smooth competitive experience.
+🚀 Future Scope
+🌍 Multi-Blockchain Support – Expand to Ethereum, Polygon, and beyond.
+🎲 Dynamic Betting System – Custom bet amounts & high-stakes tournaments.
+🏆 Player Rankings & Profiles – Track match history, achievements & leaderboards.
+🤖 AI-Generated Challenges – Ensure fresh, non-repetitive coding problems.
+💬 Community Features – Chatrooms, forums & live spectators for engagement.
+🛍️ Marketplace – Trade & earn digital assets from competitions.
 
-Secure and transparent betting system using Solana Blockchain
+📩 Support
+Need help? Contact us at mahendrakumawat80224@gmail.com 📧
 
-Automatic transfer of prize money to the winner's crypto wallet
+💡 Code. Battle. Win. 🔥 Ready to take on the challenge?
+🎯 Join the coding battle today!
 
-No upfront platform usage charges
+vbnet
+Copy
 
-Fastest transactions with Solana
-
-FAQ
-
-How does Code Battle work?
-
-Players connect their crypto wallets (e.g., Phantom wallet).
-
-Both players place a bet in Sepolia ETH.
-
-A coding challenge is presented on the platform.
-
-Players write and submit their solutions.
-
-The solutions are evaluated for correctness and optimization using the Gemini platform.
-
-The winner's wallet is credited with the entire prize pool.
-
-What happens if no player solves the code?
-
-If no player submits a valid solution, the bet amount is refunded to both players after a timeout.
-
-Is there a participation fee?
-
-There is no participation fee. Players only need to place their bet amounts.
-
-How fast are transactions?
-
-Thanks to the Solana Blockchain, transactions are processed and reflected in the winner's wallet within seconds.
-
-How are solutions evaluated?
-
-Solutions are evaluated based on correctness and optimization using the Gemini AI platform.
-
-Lessons Learned
-
-Leveraging blockchain technology for secure and transparent transactions
-
-Building real-time multiplayer systems with minimal latency
-
-Ensuring scalability and robustness for competitive platforms
-
-Future Scope
-
-Expanding Blockchain Integration: Introduce support for multiple blockchains for broader accessibility.
-
-Dynamic Betting System: Allow customizable bet amounts and incentives for high-stakes competitions.
-
-Enhanced User Profiles: Introduce player rankings, match history, and badges to encourage engagement.
-
-AI-Powered Challenges: Generate dynamic coding challenges using AI to ensure diversity and prevent repetition.
-
-Community Features: Add chatrooms, forums, and leaderboards to build a community around the platform.
-
-Marketplace Integration: Introduce a marketplace for trading digital assets earned through competitions.
-
-Support
-
-For support, email: mahendrakumawat80224@gmail.com
-
+This version of the README is **structured, engaging, and visually appealing** with proper sections, icons, and formatted markdown elements. Let me know if you need any tweaks! 🚀🔥
