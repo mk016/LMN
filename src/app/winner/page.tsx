@@ -1,7 +1,6 @@
 'use client';
 
-import React from 'react';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Trophy, Clock, Code, ArrowLeft, Wallet } from 'lucide-react';
 import Link from 'next/link';
 
@@ -19,29 +18,27 @@ interface BattleResults {
   loser: Solution;
 }
 
-interface WinnerPageProps {
-  winnerName: string;
-  winnerAddress: string;
-  loserAddress: string;
-}
-
-const WinnerPage: React.FC<WinnerPageProps> = ({ 
-  winnerName, 
-  winnerAddress, 
-  loserAddress 
-}) => {
+const WinnerPage: React.FC = () => {
   const [results, setResults] = useState<BattleResults | null>(null);
   const [challenge, setChallenge] = useState<any>(null);
+  const [winnerName, setWinnerName] = useState<string>('');
+  const [winnerAddress, setWinnerAddress] = useState<string>('');
+  const [loserAddress, setLoserAddress] = useState<string>('');
   const prizeAmount = 0.02; // 2 players * 0.01 ETH
 
   useEffect(() => {
     // Retrieve results and challenge from localStorage
     const storedResults = localStorage.getItem('battleResults');
     const storedChallenge = localStorage.getItem('currentChallenge');
-    
+
     if (storedResults) {
-      setResults(JSON.parse(storedResults));
+      const parsedResults: BattleResults = JSON.parse(storedResults);
+      setResults(parsedResults);
+      setWinnerName(parsedResults.winner.playerName);
+      setWinnerAddress(parsedResults.winner.address);
+      setLoserAddress(parsedResults.loser.address);
     }
+
     if (storedChallenge) {
       setChallenge(JSON.parse(storedChallenge));
     }
@@ -159,21 +156,10 @@ const WinnerPage: React.FC<WinnerPageProps> = ({
               </div>
             </div>
           </div>
-
-          {/* Action Buttons */}
-          <div className="mt-8 flex justify-center gap-4">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Start New Battle
-            </Link>
-          </div>
         </div>
       </div>
     </main>
   );
 };
 
-export default WinnerPage; 
+export default WinnerPage;
