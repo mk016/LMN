@@ -169,4 +169,3 @@ const WinnerPage = () => {
   );
 };
 
-export default WinnerPage; 
