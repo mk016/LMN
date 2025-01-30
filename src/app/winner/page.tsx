@@ -44,11 +44,6 @@ const WinnerPage: React.FC = () => {
     }
   }, []);
 
-  const formatAddress = (address?: string) => {
-    if (!address) return 'Address not available';
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  };
-
   if (!results || !challenge) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -95,65 +90,6 @@ const WinnerPage: React.FC = () => {
                   {winnerAddress}
                 </span>
               </p>
-            </div>
-          </div>
-
-          {/* Challenge Info */}
-          <div className="mb-8 text-center">
-            <h2 className="text-xl font-semibold mb-2">Challenge: {challenge.title}</h2>
-            <p className="text-gray-600">{challenge.description}</p>
-          </div>
-
-          {/* Results Grid */}
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Winner Card */}
-            <div className="bg-green-50 rounded-lg p-6 border-2 border-green-200">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-green-800">Winner</h3>
-                <Trophy className="w-6 h-6 text-yellow-500" />
-              </div>
-              <div className="space-y-3">
-                <p className="font-medium">{winnerName}</p>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Clock className="w-4 h-4" />
-                  <span>{results.winner.timeElapsed} seconds</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Wallet className="w-4 h-4" />
-                  <span className="break-all">{winnerAddress}</span>
-                </div>
-                <div className="mt-4">
-                  <h4 className="font-medium mb-2">Winning Solution:</h4>
-                  <pre className="bg-white p-3 rounded-lg text-sm overflow-x-auto">
-                    <code>{results.winner.code}</code>
-                  </pre>
-                </div>
-              </div>
-            </div>
-
-            {/* Runner-up Card */}
-            <div className="bg-gray-50 rounded-lg p-6 border-2 border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-800">Runner-up</h3>
-                <Code className="w-6 h-6 text-gray-500" />
-              </div>
-              <div className="space-y-3">
-                <p className="font-medium">{results.loser.playerName}</p>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Clock className="w-4 h-4" />
-                  <span>{results.loser.timeElapsed} seconds</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Wallet className="w-4 h-4" />
-                  <span className="break-all">{loserAddress}</span>
-                </div>
-                <div className="mt-4">
-                  <h4 className="font-medium mb-2">Solution:</h4>
-                  <pre className="bg-white p-3 rounded-lg text-sm overflow-x-auto">
-                    <code>{results.loser.code}</code>
-                  </pre>
-                </div>
-              </div>
             </div>
           </div>
         </div>
