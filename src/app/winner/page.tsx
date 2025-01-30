@@ -19,17 +19,7 @@ interface BattleResults {
   loser: Solution;
 }
 
-interface WinnerPageProps {
-  winnerName: string;
-  winnerAddress: string;
-  loserAddress: string;
-}
-
-const WinnerPage: React.FC<WinnerPageProps> = ({ 
-  winnerName, 
-  winnerAddress, 
-  loserAddress 
-}) => {
+const WinnerPage = () => {
   const [results, setResults] = useState<BattleResults | null>(null);
   const [challenge, setChallenge] = useState<any>(null);
   const prizeAmount = 0.02; // 2 players * 0.01 ETH
@@ -82,7 +72,7 @@ const WinnerPage: React.FC<WinnerPageProps> = ({
               🎉 Congratulations!
             </h1>
             <p className="text-xl text-gray-600 mb-4">
-              {winnerName} wins the battle!
+              {results.winner.playerName} wins the battle!
             </p>
             
             {/* Prize Information */}
@@ -95,7 +85,7 @@ const WinnerPage: React.FC<WinnerPageProps> = ({
                 Winner's Wallet:
                 <br />
                 <span className="font-mono bg-gray-100 px-2 py-1 rounded text-xs break-all">
-                  {winnerAddress}
+                  {results.winner.address}
                 </span>
               </p>
             </div>
@@ -116,14 +106,14 @@ const WinnerPage: React.FC<WinnerPageProps> = ({
                 <Trophy className="w-6 h-6 text-yellow-500" />
               </div>
               <div className="space-y-3">
-                <p className="font-medium">{winnerName}</p>
+                <p className="font-medium">{results.winner.playerName}</p>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Clock className="w-4 h-4" />
                   <span>{results.winner.timeElapsed} seconds</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Wallet className="w-4 h-4" />
-                  <span className="break-all">{winnerAddress}</span>
+                  <span className="break-all">{results.winner.address}</span>
                 </div>
                 <div className="mt-4">
                   <h4 className="font-medium mb-2">Winning Solution:</h4>
@@ -148,7 +138,7 @@ const WinnerPage: React.FC<WinnerPageProps> = ({
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Wallet className="w-4 h-4" />
-                  <span className="break-all">{loserAddress}</span>
+                  <span className="break-all">{results.loser.address}</span>
                 </div>
                 <div className="mt-4">
                   <h4 className="font-medium mb-2">Solution:</h4>
