@@ -19,6 +19,7 @@ interface PlayersUpdateData {
   [playerNumber: string]: {
     name: string;
     connected: boolean;
+    ready?: boolean;
   };
 }
 
@@ -29,11 +30,18 @@ class SocketService {
 
   connect(roomId: string) {
     try {
-      this.socket = io(process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'http://localhost:3002', {
+      if (this.socket) {
+        this.socket.disconnect();
+      }
+
+      this.socket = io('http://localhost:3002', {
         query: { roomId },
         reconnectionAttempts: this.maxReconnectAttempts,
         timeout: 10000,
-        transports: ['websocket', 'polling']
+        transports: ['polling', 'websocket'],
+        forceNew: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000
       });
 
       this.socket.on('connect', () => {
@@ -46,17 +54,19 @@ class SocketService {
         this.reconnectAttempts++;
         
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-          toast.error('Failed to connect to server. Please refresh the page.');
+          toast.error('Failed to connect to server. Please try again.');
+          this.disconnect();
         }
       });
 
-      this.socket.on('disconnect', () => {
-        console.log('Disconnected from WebSocket');
-        toast.error('Connection lost. Attempting to reconnect...');
+      return new Promise((resolve, reject) => {
+        this.socket?.on('connect', () => resolve(true));
+        this.socket?.on('connect_error', (error) => reject(error));
       });
     } catch (error) {
       console.error('Socket connection error:', error);
       toast.error('Failed to connect to server');
+      throw error;
     }
   }
 
@@ -72,6 +82,7 @@ class SocketService {
 
   submitSolution(playerNumber: 1 | 2, code: string, timeElapsed: number, isCorrect: boolean) {
     if (!this.socket) return;
+    console.log('Emitting solution:', { playerNumber, code, timeElapsed, isCorrect });
     this.socket.emit('submitSolution', {
       playerNumber,
       code,
@@ -82,7 +93,10 @@ class SocketService {
 
   subscribeToOpponentSolution(callback: (solution: PlayerSolution) => void) {
     if (!this.socket) return;
-    this.socket.on('opponentSolution', callback);
+    this.socket.on('opponentSolution', (solution) => {
+      console.log('Received opponent solution:', solution);
+      callback(solution);
+    });
   }
 
   emitChallenge(challenge: CodingChallenge) {
@@ -92,13 +106,34 @@ class SocketService {
   }
 
   emitPlayerJoin(data: PlayerJoinData) {
-    if (!this.socket || !data.roomId) return;
-    this.socket.emit('playerJoin', data);
+    if (!this.socket || !data.roomId) {
+      console.error('Socket not connected or missing roomId');
+      return;
+    }
+    
+    console.log('Current socket state:', {
+      connected: this.socket.connected,
+      roomId: data.roomId
+    });
+
+    this.socket.emit('playerJoin', {
+      roomId: data.roomId,
+      playerNumber: data.playerNumber,
+      playerName: data.playerName
+    });
   }
 
   subscribeToPlayersUpdate(callback: (players: PlayersUpdateData) => void) {
     if (!this.socket) return;
-    this.socket.on('playersUpdate', callback);
+    
+    this.socket.on('playersUpdate', (players) => {
+      console.log('Received players update:', players);
+      const formattedPlayers: PlayersUpdateData = {
+        '1': players['1'] || { name: '', connected: false },
+        '2': players['2'] || { name: '', connected: false }
+      };
+      callback(formattedPlayers);
+    });
   }
 
   disconnect() {
@@ -111,6 +146,47 @@ class SocketService {
   on(event: string, callback: (...args: any[]) => void) {
     if (!this.socket) return;
     this.socket.on(event, callback);
+  }
+
+  emitGameStart(roomId: string, startTime: number) {
+    if (!this.socket) return;
+    console.log('Emitting game start:', { roomId, startTime });
+    this.socket.emit('gameStart', { roomId, startTime });
+  }
+
+  subscribeToGameStart(callback: (startTime: number) => void) {
+    if (!this.socket) return;
+    this.socket.on('gameStart', (data) => {
+      console.log('Received game start:', data);
+      if (data && typeof data.startTime === 'number') {
+        callback(data.startTime);
+      }
+    });
+  }
+
+  emitPlayerReady(roomId: string, playerNumber: number) {
+    if (!this.socket) return;
+    this.socket.emit('playerReady', { roomId, playerNumber });
+  }
+
+  emitBattleComplete(roomId: string, data: { winner: any; solutions: any }) {
+    if (!this.socket) return;
+    this.socket.emit('battleComplete', { roomId, ...data });
+  }
+
+  subscribeToBattleComplete(callback: (data: any) => void) {
+    if (!this.socket) return;
+    this.socket.on('battleComplete', callback);
+  }
+
+  emitPaymentComplete(roomId: string, playerNumber: number) {
+    if (!this.socket) return;
+    this.socket.emit('paymentComplete', { roomId, playerNumber });
+  }
+
+  subscribeToPaymentComplete(callback: (data: { playerNumber: number }) => void) {
+    if (!this.socket) return;
+    this.socket.on('paymentComplete', callback);
   }
 }
 

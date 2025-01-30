@@ -126,7 +126,7 @@ export async function verifyAndShowResult(
     
     // Transfer prize to winner
     const totalPrize = 0.02; // 2 players * 0.01 ETH
-    await PaymentService.transferToWinner(winner.walletAddress, totalPrize);
+    await PaymentService.transferWinningsToWinner(winner.walletAddress, totalPrize.toString());
     
     // Store results in localStorage
     const battleResults = {

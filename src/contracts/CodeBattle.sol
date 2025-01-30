@@ -1,47 +1,53 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.19;
 
 contract CodeBattle {
     address public owner;
     uint256 public entryFee;
+    address public player1;
+    address public player2;
+    address public winner;
+    bool public battleStarted;
     
-    struct Battle {
-        address player;
-        uint256 amount;
-        bool completed;
-    }
-    
-    mapping(bytes32 => Battle) public battles;
-    
-    event BattleCreated(bytes32 battleId, address player, uint256 amount);
-    event BattleCompleted(bytes32 battleId, address player, uint256 amount);
+    mapping(address => uint256) public balances;
     
     constructor(uint256 _entryFee) {
         owner = msg.sender;
         entryFee = _entryFee;
     }
-    
-    function createBattle() external payable returns (bytes32) {
+
+    // Players join the battle by paying the entry fee
+    function joinBattle() public payable {
         require(msg.value == entryFee, "Incorrect entry fee");
+        require(player1 == address(0) || player2 == address(0), "Battle is full");
+
+        if (player1 == address(0)) {
+            player1 = msg.sender;
+        } else {
+            player2 = msg.sender;
+            battleStarted = true;
+        }
+    }
+
+    // The backend determines the winner and calls this function
+    function declareWinner(address _winner) public {
+        require(battleStarted, "Battle not started");
+        require(msg.sender == owner, "Only the owner can declare the winner");
+        require(_winner == player1 || _winner == player2, "Invalid winner");
+
+        winner = _winner;
+        payable(winner).transfer(address(this).balance);
         
-        bytes32 battleId = keccak256(abi.encodePacked(msg.sender, block.timestamp));
-        battles[battleId] = Battle(msg.sender, msg.value, false);
-        
-        emit BattleCreated(battleId, msg.sender, msg.value);
-        return battleId;
+        // Reset battle
+        player1 = address(0);
+        player2 = address(0);
+        winner = address(0);
+        battleStarted = false;
     }
     
-    function completeBattle(bytes32 battleId, bool success) external {
-        require(msg.sender == owner, "Only owner can complete battles");
-        Battle storage battle = battles[battleId];
-        require(!battle.completed, "Battle already completed");
-        
-        battle.completed = true;
-        
-        if (success) {
-            payable(battle.player).transfer(battle.amount * 2);
-        }
-        
-        emit BattleCompleted(battleId, battle.player, battle.amount);
+    // Withdraw function in case of issues
+    function withdraw() public {
+        require(msg.sender == owner, "Only owner can withdraw");
+        payable(owner).transfer(address(this).balance);
     }
 }
