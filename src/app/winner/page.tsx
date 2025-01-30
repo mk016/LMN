@@ -5,18 +5,21 @@ import { useEffect, useState } from 'react';
 import { Trophy, Clock, Code, ArrowLeft, Wallet } from 'lucide-react';
 import Link from 'next/link';
 
-interface Solution {
-  playerNumber: number;
-  playerName: string;
-  address: string;
-  timeElapsed: number;
-  code: string;
-  isCorrect: boolean;
-}
-
 interface BattleResults {
-  winner: Solution;
-  loser: Solution;
+  winner: {
+    playerName: string;
+    address: string;
+    code: string;
+    timeElapsed: number;
+    isCorrect: boolean;
+  };
+  loser: {
+    playerName: string;
+    address: string;
+    code: string;
+    timeElapsed: number;
+    isCorrect: boolean;
+  };
 }
 
 const WinnerPage = () => {
